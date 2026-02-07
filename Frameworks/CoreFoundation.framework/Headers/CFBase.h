@@ -44,11 +44,11 @@
 #error Do not know the endianess of this architecture
 #endif
 
-#if !__BIG_ENDIAN__ && !__LITTLE_ENDIAN__
+#if !(defined(__BIG_ENDIAN__) && __BIG_ENDIAN__) && !(defined(__LITTLE_ENDIAN__) && __LITTLE_ENDIAN__)
 #error Both __BIG_ENDIAN__ and __LITTLE_ENDIAN__ cannot be false
 #endif
 
-#if __BIG_ENDIAN__ && __LITTLE_ENDIAN__
+#if (defined(__BIG_ENDIAN__) && __BIG_ENDIAN__) && (defined(__LITTLE_ENDIAN__) && __LITTLE_ENDIAN__)
 #error Both __BIG_ENDIAN__ and __LITTLE_ENDIAN__ cannot be true
 #endif
 
@@ -80,18 +80,49 @@
     #include <MacTypes.h>
   #endif
 #else
-  #if (TARGET_OS_OSX || TARGET_OS_IPHONE) && !DEPLOYMENT_RUNTIME_SWIFT
+  #if (TARGET_OS_OSX || TARGET_OS_IPHONE)
     #include <libkern/OSTypes.h>
   #endif
 #endif
 
+// from <malloc/malloc.h>
+typedef unsigned long long CFAllocatorTypeID;
+
+#if TARGET_OS_MAC
+    #include <malloc/_malloc.h>
+    #if defined(_MALLOC_TYPE_ENABLED) && _MALLOC_TYPE_ENABLED && defined(_MALLOC_TYPED)
+        #if defined(CF_BUILDING_CF) || defined(NSBUILDINGFOUNDATION)
+            // Enable TMO internally to Foundation/CoreFoundation whenever the system allocator enables it
+            #define CF_ENABLE_TYPED_MEMORY_OPERATIONS 1
+        #elif defined(__ENVIRONMENT_OS_VERSION_MIN_REQUIRED__) && \
+            ((TARGET_OS_IOS && __ENVIRONMENT_OS_VERSION_MIN_REQUIRED__ >= 190000) || \
+                (TARGET_OS_OSX && __ENVIRONMENT_OS_VERSION_MIN_REQUIRED__ >= 160000) || \
+                (TARGET_OS_VISION && __ENVIRONMENT_OS_VERSION_MIN_REQUIRED__ >= 30000) || \
+                (TARGET_OS_WATCH && __ENVIRONMENT_OS_VERSION_MIN_REQUIRED__ >= 120000) || \
+                (TARGET_OS_TV && __ENVIRONMENT_OS_VERSION_MIN_REQUIRED__ >= 190000))
+            // Only enable TMO if we're building with a deployment target >= iOS 19.0 (and aligned trains)
+            #define CF_ENABLE_TYPED_MEMORY_OPERATIONS 1
+        #endif
+    #endif /* defined(_MALLOC_TYPE_ENABLED) && _MALLOC_TYPE_ENABLED && defined(_MALLOC_TYPED) */
+#endif /* TARGET_OS_MAC */
+
+#if defined(CF_ENABLE_TYPED_MEMORY_OPERATIONS) && CF_ENABLE_TYPED_MEMORY_OPERATIONS
+    #define _CF_TYPED_ALLOC(override, type_param_pos) _MALLOC_TYPED(override, type_param_pos)
+    #define CF_HAS_TYPED_ALLOCATOR 1
+#else
+    #define _CF_TYPED_ALLOC(override, type_param_pos)
+    #define CF_HAS_TYPED_ALLOCATOR 0
+#endif
+
+#if TARGET_OS_MAC
+    struct _malloc_zone_t;
+#endif
+
 #if !defined(__MACTYPES__)
 #if !defined(_OS_OSTYPES_H)
-#if DEPLOYMENT_RUNTIME_SWIFT
-    typedef _Bool                   Boolean;
-#else
+
     typedef unsigned char           Boolean;
-#endif
+
     typedef unsigned char           UInt8;
     typedef signed char             SInt8;
     typedef unsigned short          UInt16;
@@ -477,7 +508,7 @@ CF_EXPORT double kCFCoreFoundationVersionNumber;
 #define kCFCoreFoundationVersionNumber_iOS_9_x_Max 1299
 #endif
 
-#if __LLP64__
+#if defined(__LLP64__) && __LLP64__
 typedef unsigned long long CFTypeID;
 typedef unsigned long long CFOptionFlags;
 typedef unsigned long long CFHashCode;
@@ -651,10 +682,32 @@ CF_EXPORT
 CFAllocatorRef CFAllocatorCreate(CFAllocatorRef allocator, CFAllocatorContext *context);
 
 CF_EXPORT
-void *CFAllocatorAllocate(CFAllocatorRef allocator, CFIndex size, CFOptionFlags hint);
+CFAllocatorRef CFAllocatorCreateWithZone(CFAllocatorRef allocator, struct _malloc_zone_t *zone) API_UNAVAILABLE(macos, ios, watchos, tvos, visionos);
+
+/* Typed allocator interfaces
+
+   These interfaces are provided to either serve as rewrite targets for the
+   compiler, or to be invoked internally to Foundation/CoreFoundation to
+   manually interfact with the typed allocator.
+*/
 
 CF_EXPORT
-void *CFAllocatorReallocate(CFAllocatorRef allocator, void *ptr, CFIndex newsize, CFOptionFlags hint);
+void *CFAllocatorAllocateTyped(CFAllocatorRef allocator, CFIndex size, CFAllocatorTypeID descriptor, CFOptionFlags hint) API_AVAILABLE(macos(15.0), ios(18.0), watchos(11.0), tvos(18.0), visionos(2.0));
+
+CF_EXPORT
+void *CFAllocatorReallocateTyped(CFAllocatorRef allocator, void *ptr, CFIndex newsize, CFAllocatorTypeID descriptor, CFOptionFlags hint) API_AVAILABLE(macos(15.0), ios(18.0), watchos(11.0), tvos(18.0), visionos(2.0));
+
+CF_EXPORT
+void *CFAllocatorAllocateBytes(CFAllocatorRef allocator, CFIndex size, CFOptionFlags hint) API_AVAILABLE(macos(15.0), ios(18.0), watchos(11.0), tvos(18.0), visionos(2.0));
+
+CF_EXPORT
+void *CFAllocatorReallocateBytes(CFAllocatorRef allocator, void *ptr, CFIndex newsize, CFOptionFlags hint) API_AVAILABLE(macos(15.0), ios(18.0), watchos(11.0), tvos(18.0), visionos(2.0));
+
+CF_EXPORT
+void *CFAllocatorAllocate(CFAllocatorRef allocator, CFIndex size, CFOptionFlags hint) _CF_TYPED_ALLOC(CFAllocatorAllocateTyped, 2);
+
+CF_EXPORT
+void *CFAllocatorReallocate(CFAllocatorRef allocator, void *ptr, CFIndex newsize, CFOptionFlags hint) _CF_TYPED_ALLOC(CFAllocatorReallocateTyped, 3);
 
 CF_EXPORT
 void CFAllocatorDeallocate(CFAllocatorRef allocator, void *ptr);
@@ -682,14 +735,11 @@ CFTypeRef CFRetain(CFTypeRef cf);
 CF_EXPORT
 void CFRelease(CFTypeRef cf);
 
-#if DEPLOYMENT_RUNTIME_SWIFT
-#else
 CF_EXPORT
 CFTypeRef CFAutorelease(CFTypeRef CF_RELEASES_ARGUMENT arg) API_AVAILABLE(macos(10.9), ios(7.0), watchos(2.0), tvos(9.0));
 
 CF_EXPORT
 CFIndex CFGetRetainCount(CFTypeRef cf);
-#endif
 
 CF_EXPORT
 Boolean CFEqual(CFTypeRef cf1, CFTypeRef cf2);
@@ -710,12 +760,6 @@ CF_EXPORT
 CFTypeRef CFMakeCollectable(CFTypeRef cf) CF_AUTOMATED_REFCOUNT_UNAVAILABLE;
 
 CF_EXTERN_C_END
-
-#if DEPLOYMENT_RUNTIME_SWIFT
-
-#define _CF_SWIFT_RC_PINNED_FLAG (0x1)
-#define _CF_CONSTANT_OBJECT_STRONG_RC ((uintptr_t)_CF_SWIFT_RC_PINNED_FLAG)
-#endif
 
 #if __has_include(<ptrauth.h>)
 #include <ptrauth.h>

@@ -76,6 +76,10 @@ typedef int             vm_prot_t;
 
 /*
  *	Protection values, defined as bits within the vm_prot_t type
+ *
+ *  When making a new VM_PROT_*, update tests vm_parameter_validation_[user|kern]
+ *  and their expected results; they deliberately call VM functions with invalid
+ *  vm_prot values and you may be turning one of those invalid protections valid.
  */
 
 #define VM_PROT_NONE    ((vm_prot_t) 0x00)
@@ -95,13 +99,6 @@ typedef int             vm_prot_t;
  */
 
 #define VM_PROT_ALL     (VM_PROT_READ|VM_PROT_WRITE|VM_PROT_EXECUTE)
-
-/*
- *	This is an alias to VM_PROT_EXECUTE to identify callers that
- *	want to allocate an hardware assisted Read-only/read-write
- *	trusted path in userland.
- */
-#define        VM_PROT_RORW_TP                 (VM_PROT_EXECUTE)
 
 /*
  *	An invalid protection value.

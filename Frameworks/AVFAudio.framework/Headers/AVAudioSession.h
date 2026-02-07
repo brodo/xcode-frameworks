@@ -2,7 +2,7 @@
 /*!
 	@file		AVAudioSession.h
 	@framework	AudioSession.framework
-	@copyright	(c) 2009-2023 Apple Inc. All rights reserved.
+	@copyright	(c) 2009-2024 Apple Inc. All rights reserved.
 */
 
 #ifndef AudioSession_AVAudioSession_h
@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 // =================================================================================================
 #pragma mark-- iOS/tvOS/watchOS AVAudioSession interface --
 
+NS_SWIFT_SENDABLE
 API_AVAILABLE(ios(3.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos) 
 @interface AVAudioSession : NSObject {
 @private
@@ -162,9 +163,9 @@ API_AVAILABLE(ios(3.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos)
     ringtones and alerts. By setting this property to YES, clients will not be interrupted
     by incoming call notifications and other alerts. Starting in iOS 14.0, users can set a global
     preference for incoming call display style to "Banner" or "Full Screen". With "Banner" display style,
-    if below property is set to YES then clients will not be interrupted on incoming call notification
-    and user will have opportunity to accept or decline the call. If call is declined, the session
-    will not be interrupted, but if user accepts the incoming call, the session will be interrupted.
+    if below property is set to YES then system audio will be silenced. Thus, clients will not be interrupted
+    on incoming call notification and user will have opportunity to accept or decline the call. If call is declined,
+    the session will not be interrupted, but if user accepts the incoming call, the session will be interrupted.
     With  display style set as "Full Screen", below property will have no effect and clients will be
     interrupted by incoming calls. Apps that record audio and/or video and apps that are used for
     music performance are candidates for using this feature.
@@ -175,6 +176,60 @@ API_AVAILABLE(ios(3.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos)
 /// Get the currently resolved rendering mode to badge content appropriately.
 /// Clients should use this property to determine what to badge content as.
 @property(readonly) AVAudioSessionRenderingMode renderingMode API_AVAILABLE(ios(17.2), tvos(17.2)) API_UNAVAILABLE(watchos, macos, visionos);
+
+/*!
+ @brief Set a preference to enable echo cancelled input on supported hardware
+
+Applications might want to record the built-in microphone's input while also playing audio out via the built-in speaker.
+Enabling echo cancelled input is useful when the application needs the input signal to be clear of any echoes
+from the audio playing out of the built-in speaker.
+
+Audio sessions using Voice Processor don't need this option as echo cancellation is implicitly applied for those routes.
+The Voice Processor solution is tuned for voice signals, unlike this option, which is tuned for better capture
+of wider range of audio signals in the presence of built-in speaker echo.
+
+This option is only available on certain 2024 or later iPhone models and is valid only when used with the following configurations:
+ - AVAudioSessionCategoryPlayAndRecord and AVAudioSessionModeDefault
+ - AVAudioSessionCategoryMultiRoute and AVAudioSessionModeDualRoute
+Support can be queried using property `isEchoCancelledInputAvailable`.
+Other recording sessions might be interrupted if this option is not compatible with sessions that are already recording.
+
+After an audio session goes active, `isEchoCancelledInputEnabled` property can be queried to check if the option was honored.
+Note that the enabled state may change after route changes, e.g. if user plugs in a headset, that route might not support echo cancellation.
+*/
+- (BOOL)setPrefersEchoCancelledInput:(BOOL)value error:(NSError **)error API_AVAILABLE(ios(18.2)) API_UNAVAILABLE(tvos, watchos, macos, visionos);
+@property (readonly, nonatomic) BOOL prefersEchoCancelledInput API_AVAILABLE(ios(18.2)) API_UNAVAILABLE(tvos, watchos, macos, visionos);
+
+/// Returns YES if echo cancelled input is successfully enabled on an active session.
+/// Please see `prefersEchoCancelledInput` above for more details.
+@property (readonly, nonatomic) BOOL isEchoCancelledInputEnabled API_AVAILABLE(ios(18.2)) API_UNAVAILABLE(tvos, watchos, macos, visionos);
+
+/// This property will return YES if the device supports echo cancellation with the following category and mode combinations:
+///	- ``AVAudioSessionCategoryPlayAndRecord`` with ``AVAudioSessionModeDefault``
+///	- ``AVAudioSessionCategoryMultiRoute`` with ``AVAudioSessionModeDualRoute``
+///
+/// Query whether built-in mic / built-in speaker route supports echo cancellation for the session's given category and mode.
+@property(readonly, nonatomic) BOOL isEchoCancelledInputAvailable API_AVAILABLE(ios(18.2)) API_UNAVAILABLE(watchos, tvos) API_UNAVAILABLE(macos);
+
+/// Sets a Boolean value to inform the system to mute the session's output audio. The default value is false (unmuted).
+///
+/// This property is supported with all categories and modes, except for
+/// ``AVAudioSessionCategoryPlayAndRecord`` where it is only supported with ``AVAudioSessionModeDefault``.
+/// Changing the mode to non-default mode with ``AVAudioSessionCategoryPlayAndRecord``
+/// category will cause the session to unmute.
+///
+/// Changes in output mute state can be observed via ``AVAudioSessionOutputMuteStateChangeNotification``.
+/// If this value is set to true, ``AVAudioSessionUserIntentToUnmuteOutputNotification``
+/// may be sent when a user hints to unmute by changing the volume.
+///
+/// - Note: This will not mute system sounds and haptics.
+///
+/// - Parameters:
+/// - `muted`: A Boolean value to set the audio output to the desired muted state.
+/// - `error`: A pointer to an error object. If an error occurs, the framework sets the pointer to an error object that describes the failure.
+- (BOOL)setOutputMuted:(BOOL)muted error:(NSError **)outError API_AVAILABLE(ios(26.0)) API_UNAVAILABLE(watchos, tvos, visionos, macos);
+/// A Boolean value that indicates whether audio output is in a muted state.
+@property(readonly, getter=isOutputMuted) BOOL outputMuted API_AVAILABLE(ios(26.0)) API_UNAVAILABLE(watchos, tvos, visionos, macos);
 
 @end
 
@@ -200,7 +255,8 @@ API_AVAILABLE(ios(3.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos)
 	deactivation is requested, the session will be deactivated, but the method will return NO and
 	populate the NSError with the code property set to AVAudioSessionErrorCodeIsBusy to indicate the
 	misuse of the API. Prior to iOS 8, the session would have remained active if it had running I/Os
-	at the time of the deactivation request.
+	at the time of the deactivation request. Starting in iOS 26.0, deactivating while IO is running will
+	no longer return AVAudioSessionErrorCodeIsBusy.
 */
 - (BOOL)setActive:(BOOL)active error:(NSError **)outError API_AVAILABLE(ios(3.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
 - (BOOL)setActive:(BOOL)active withOptions:(AVAudioSessionSetActiveOptions)options error:(NSError **)outError API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
@@ -327,7 +383,7 @@ API_AVAILABLE(ios(3.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos)
 	an error.
 */
 
-/// The current hardware sample rate
+/// The current hardware sample rate. Is key-value observable (starting iOS 18.0).
 @property (readonly) double sampleRate API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
 
 /// The current number of hardware input channels. Is key-value observable.
@@ -342,11 +398,11 @@ API_AVAILABLE(ios(3.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos)
 /// The current hardware output latency in seconds.
 @property (readonly) NSTimeInterval outputLatency API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
 
-/// The current hardware IO buffer duration in seconds.
+/// The current hardware IO buffer duration in seconds. Is key-value observable.
 @property (readonly) NSTimeInterval IOBufferDuration API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
 
 /// Get an array of channel layouts that the current route supports.
-/// This property is only supported when the output is routed to ports of type AVAudioSessionPortCarAudio
+/// This property is only supported when the output is routed to ports of type AVAudioSessionPortCarAudio or AVAudioSessionPortAirPlay
 /// Otherwise, an empty array will be returned. Note that this will return an empty array if session is inactive.
 /// Clients should listen to AVAudioSessionRenderingCapabilitiesChangeNotification to be notified when this changes.
 @property(readonly) NSArray<AVAudioChannelLayout*>* supportedOutputChannelLayouts API_AVAILABLE(ios(17.2), tvos(17.2)) API_UNAVAILABLE(watchos, macos, visionos);
@@ -402,6 +458,9 @@ API_AVAILABLE(ios(3.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos)
 	Note that this property only applies to the session's current category and mode. For
     example, if the session's current category is AVAudioSessionCategoryPlayback, there will be
     no available inputs.
+ 
+	On iOS, clients can listen to AVAudioSessionAvailableInputsChangeNotification to
+	be notified when this changes.
 */
 @property (readonly, nullable) NSArray<AVAudioSessionPortDescription *> *availableInputs API_AVAILABLE(ios(7.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
 
@@ -446,79 +505,20 @@ API_AVAILABLE(ios(3.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos)
 
 @end // interface for AVAudioSession (RoutingConfiguration)
 
-#if defined(TARGET_OS_VISION) && TARGET_OS_VISION
-/*!
- The perceived "size" or "immersivity" of the sound. Use Small for least
- immersive and Large for most immersive.
- */
-typedef NS_ENUM(NSInteger, AVAudioSessionSoundStageSize) {
-    /// The audio session determines its own sound stage size based on
-    /// a handful of factors
-    AVAudioSessionSoundStageSizeAutomatic = 0,
-    
-    /// A smaller, front-focused sound stage
-    AVAudioSessionSoundStageSizeSmall     = 1,
-    
-    /// A medium-immersive sound stage
-    AVAudioSessionSoundStageSizeMedium    = 2,
-    
-    /// A fully-immersive sound stage
-    AVAudioSessionSoundStageSizeLarge     = 3,
-} NS_SWIFT_NAME(AVAudioSession.SoundStageSize);
+@interface  AVAudioSession (MicrophoneInjection)
 
-/*!
- When the intended spatial experience is HeadTracked, the anchoring strategy
- provides additional information about the reference point for spatialization.
- */
-typedef NS_ENUM(NSInteger, AVAudioSessionAnchoringStrategy) {
-    /// The audio session determines its own anchoring strategy based on
-    /// a handful of factors
-    AVAudioSessionAnchoringStrategyAutomatic   = 0,
-    
-    /// The session is anchored to the developer-provided scene
-    /// identifier (i.e. UIScene.session.persistentIdentifier)
-    AVAudioSessionAnchoringStrategyScene       = 1,
-    
-    /// The session is anchored to the user's concept of "front"
-    /// which the user can move with an intentional gesture.
-    AVAudioSessionAnchoringStrategyFront       = 2
-} NS_REFINED_FOR_SWIFT;
+/// Set the preferred form of audio injection into another app's input stream
+/// See AVAudioSessionMicrophoneInjectionMode for available modes
+- (BOOL)setPreferredMicrophoneInjectionMode:(AVAudioSessionMicrophoneInjectionMode)inValue error:(NSError**)outError API_AVAILABLE(ios(18.2), visionos(2.2)) API_UNAVAILABLE(tvos, watchos, macos);
+@property(readonly) AVAudioSessionMicrophoneInjectionMode  preferredMicrophoneInjectionMode API_AVAILABLE(ios(18.2), visionos(2.2)) API_UNAVAILABLE(tvos, watchos, macos);
 
-typedef NS_ENUM(NSInteger, AVAudioSessionSpatialExperience) {
-    /// A fully head-tracked spatial experience parameterized by
-    /// a sound stage size and anchoring strategy
-    AVAudioSessionSpatialExperienceHeadTracked = 0,
-    
-    /// An unanchored, non-head-tracked spatial experience parameterized
-    /// by a sound stage size
-    AVAudioSessionSpatialExperienceFixed       = 1,
-    
-    /// An experience that bypasses any system-provided spatialization and
-    /// instead mixes the application's sound straight to the output
-    AVAudioSessionSpatialExperienceBypassed  = 2,
-} NS_REFINED_FOR_SWIFT;
+/// Indicates if microphone injection is available.
+/// Observe AVAudioSessionMicrophoneInjectionCapabilitiesChangeNotification for changes to this property
+@property(readonly) BOOL isMicrophoneInjectionAvailable API_AVAILABLE(ios(18.2), visionos(2.2)) API_UNAVAILABLE(tvos, watchos, macos);
 
-typedef NSString * const AVAudioSessionSpatialExperienceOption NS_TYPED_ENUM NS_REFINED_FOR_SWIFT;
+@end
 
-/// Associated value is NSNumber with AVAudioSessionSoundStageSize. Only used if
-/// SpatialExperience is HeadTracked or Fixed. If not provided for
-/// those SpatialExperiences, the default will be
-/// AVAudioSessionSoundStageSizeAutomatic.
-OS_EXPORT AVAudioSessionSpatialExperienceOption AVAudioSessionSpatialExperienceOptionSoundStageSize API_AVAILABLE(visionos(1.0)) API_UNAVAILABLE(ios, watchos, tvos, macos);
-
-/// Associated value is NSNumber with AVAudioSessionAnchoringStrategy. Only used if
-/// SpatialExperience is HeadTracked. If not provided for a head-tracked
-/// spatial experience, the default will be
-/// AVAudioSessionAnchoringStrategyAutomatic.
-OS_EXPORT AVAudioSessionSpatialExperienceOption AVAudioSessionSpatialExperienceOptionAnchoringStrategy API_AVAILABLE(visionos(1.0)) API_UNAVAILABLE(ios, watchos, tvos, macos);
-
-/// Associated value is NSString from UIScene.session.persistentIdentifier. Only
-/// used if SpatialExperience is HeadTracked and AnchoringStrategy is
-/// Scene. If not provided for a scene-anchored spatial experience, the
-/// session will fail to set the intended spatial experience and
-/// return an error.
-OS_EXPORT AVAudioSessionSpatialExperienceOption AVAudioSessionSpatialExperienceOptionSceneIdentifier API_AVAILABLE(visionos(1.0)) API_UNAVAILABLE(ios, watchos, tvos, macos);
-
+#if TARGET_OS_VISION
 
 @interface AVAudioSession (SpatialPreference)
 
@@ -548,124 +548,7 @@ OS_EXPORT AVAudioSessionSpatialExperienceOption AVAudioSessionSpatialExperienceO
 
 @end // AVAudioSession (NowPlayingCandidacy)
 
-#endif // TARGET_OS_XR
-
-
-#pragma mark-- Names for NSNotifications --
-
-/*!
-	@brief	Notification sent to registered listeners when the system has interrupted the audio
-			session and when the interruption has ended.
-
-    Check the notification's userInfo dictionary for the interruption type, which is either
-    Begin or End. In the case of an end interruption notification, check the userInfo dictionary
-    for AVAudioSessionInterruptionOptions that indicate whether audio playback should resume.
-    In the case of a begin interruption notification, the reason for the interruption can be found
-    within the info dictionary under the key AVAudioSessionInterruptionReasonKey.
-*/
-OS_EXPORT NSNotificationName const  AVAudioSessionInterruptionNotification API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-
-/*!
-	@brief	Notification sent to registered listeners when an audio route change has occurred.
-
-	Check the notification's userInfo dictionary for the route change reason and for a description
-	of the previous audio route.
-*/
-OS_EXPORT NSNotificationName const  AVAudioSessionRouteChangeNotification API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-
-/*!
-	@brief	Notification sent to registered listeners if the media server is killed.
-
-	In the event that the server is killed, take appropriate steps to handle requests that come in
-	before the server resets.  See Technical Q&A QA1749.
-*/
-OS_EXPORT NSNotificationName const  AVAudioSessionMediaServicesWereLostNotification API_AVAILABLE(ios(7.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-
-/*!
-	@brief	Notification sent to registered listeners when the media server restarts.
-
-	In the event that the server restarts, take appropriate steps to re-initialize any audio objects
-	used by your application.  See Technical Q&A QA1749.
-*/
-OS_EXPORT NSNotificationName const  AVAudioSessionMediaServicesWereResetNotification API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-
-/*!
-	@brief	Notification sent to registered listeners when they are in the foreground with an active
-		audio session and primary audio from other applications starts and stops.
-
-	Check the notification's userInfo dictionary for the notification type, which is either Begin or
-	End. Foreground applications may use this notification as a hint to enable or disable audio that
-	is secondary to the functionality of the application. For more information, see the related
-	property secondaryAudioShouldBeSilencedHint.
-*/
-OS_EXPORT NSNotificationName const  AVAudioSessionSilenceSecondaryAudioHintNotification API_AVAILABLE(ios(8.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-
-/*!
-    @brief  Notification sent to registered listeners when spatial playback capabilities are changed due to a
-    change in user preference.
-
-    Check the notification's userInfo dictionary for AVAudioSessionSpatialAudioEnabledKey to check if spatial
-    audio is enabled.
-    
-    Observers of this notification should also observe AVAudioSessionRouteChangeNotification since a route change
-    may also result in a change in the ability for the system to play spatial audio. Use
-    AVAudioSessionPortDescription's isSpatialAudioEnabled property to check if the current route supports
-    spatialized playback.
-*/
-OS_EXPORT NSNotificationName const  AVAudioSessionSpatialPlaybackCapabilitiesChangedNotification API_AVAILABLE(ios(15.0), watchos(8.0), tvos(15.0)) API_UNAVAILABLE(macos) NS_SWIFT_NAME(AVAudioSession.spatialPlaybackCapabilitiesChangedNotification);
-
-/// Notification sent to registered listeners when the resolved rendering mode changes.
-OS_EXPORT NSNotificationName const  AVAudioSessionRenderingModeChangeNotification API_AVAILABLE(ios(17.2), tvos(17.2)) API_UNAVAILABLE(watchos, macos, visionos) NS_SWIFT_NAME(AVAudioSession.renderingModeChangeNotification);
-
-/*!
-	 @brief Notification sent to registered listeners when the rendering capabilities change.
- */
-OS_EXPORT NSNotificationName const AVAudioSessionRenderingCapabilitiesChangeNotification API_AVAILABLE(ios(17.2), tvos(17.2)) API_UNAVAILABLE(watchos, macos, visionos) NS_SWIFT_NAME(AVAudioSession.renderingCapabilitiesChangeNotification);
-
-#pragma mark-- Keys for NSNotification userInfo dictionaries --
-
-/// keys for AVAudioSessionSpatialPlaybackCapabilitiesChangedNotification
-/// value is an NSNumber whose boolean value indicates if spatial audio enabled.
-OS_EXPORT NSString *const AVAudioSessionSpatialAudioEnabledKey API_AVAILABLE(ios(15.0), watchos(8.0), tvos(15.0)) API_UNAVAILABLE(macos);
-
-/// keys for AVAudioSessionInterruptionNotification
-/// Value is an NSNumber representing an AVAudioSessionInterruptionType
-OS_EXPORT NSString *const AVAudioSessionInterruptionTypeKey API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-
-/// Only present for end interruption events.  Value is of type AVAudioSessionInterruptionOptions.
-OS_EXPORT NSString *const AVAudioSessionInterruptionOptionKey API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-
-/// Only present in begin interruption events. Value is of type AVAudioSessionInterruptionReason.
-OS_EXPORT NSString *const AVAudioSessionInterruptionReasonKey API_AVAILABLE(ios(14.5), watchos(7.3)) API_UNAVAILABLE(tvos, macos);
-
-/*!
-	Only present in begin interruption events, where the interruption is a direct result of the
-	application being suspended by the operating sytem. Value is a boolean NSNumber, where a true
-	value indicates that the interruption is the result of the application being suspended, rather
-	than being interrupted by another audio session.
-
-	Starting in iOS 10, the system will deactivate the audio session of most apps in response to the
-	app process being suspended. When the app starts running again, it will receive the notification
-	that its session has been deactivated by the system. Note that the notification is necessarily
-	delayed in time, due to the fact that the application was suspended at the time the session was
-	deactivated by the system and the notification can only be delivered once the app is running
-	again.
-*/
-OS_EXPORT NSString *const AVAudioSessionInterruptionWasSuspendedKey API_DEPRECATED("No longer supported - see AVAudioSessionInterruptionReasonKey", ios(10.3, 14.5), watchos(3.2, 7.3), tvos(10.3, 14.5));
-
-/// keys for AVAudioSessionRouteChangeNotification
-/// value is an NSNumber representing an AVAudioSessionRouteChangeReason
-OS_EXPORT NSString *const AVAudioSessionRouteChangeReasonKey API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-/// value is AVAudioSessionRouteDescription *
-OS_EXPORT NSString *const AVAudioSessionRouteChangePreviousRouteKey API_AVAILABLE(ios(6.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-
-/// keys for AVAudioSessionSilenceSecondaryAudioHintNotification
-/// value is an NSNumber representing an AVAudioSessionSilenceSecondaryAudioHintType
-OS_EXPORT NSString *const AVAudioSessionSilenceSecondaryAudioHintTypeKey API_AVAILABLE(ios(8.0), watchos(2.0), tvos(9.0)) API_UNAVAILABLE(macos);
-
-/// keys for AVAudioSessionRenderingModeChangeNotification
-/// Contains a payload of NSInteger representing the new resolved rendering mode
-OS_EXPORT NSString *const AVAudioSessionRenderingModeNewRenderingModeKey API_AVAILABLE(ios(17.2), tvos(17.2)) API_UNAVAILABLE(watchos, macos, visionos);
+#endif // TARGET_OS_VISION
 
 NS_ASSUME_NONNULL_END
 

@@ -79,10 +79,13 @@ typedef NS_ENUM(NSInteger, AVAudioVoiceProcessingOtherAudioDuckingLevel) {
 	@var             duckingLevel
 						 Ducking level of other audio
 */
+NS_SWIFT_SENDABLE
 typedef struct API_AVAILABLE(macos(14.0), ios(17.0)) API_UNAVAILABLE(tvos, watchos) AVAudioVoiceProcessingOtherAudioDuckingConfiguration {
 	BOOL enableAdvancedDucking;
 	AVAudioVoiceProcessingOtherAudioDuckingLevel duckingLevel;
 } AVAudioVoiceProcessingOtherAudioDuckingConfiguration API_AVAILABLE(macos(14.0), ios(17.0)) API_UNAVAILABLE(tvos, watchos);
+
+@class CASpatialAudioExperience;
 
 /*!	@class AVAudioIONode
 	@abstract 
@@ -245,7 +248,7 @@ API_AVAILABLE(macos(10.10), ios(8.0), watchos(4.0), tvos(11.0))
 		In general, when other audio is played during voice chat, applying a higher level of ducking could increase the intelligibility of the voice chat.
 		If not set, the default ducking configuration is to disable advanced ducking, with a ducking level set to AVAudioVoiceProcessingOtherAudioDuckingLevelDefault.
 */
-@property (nonatomic) AVAudioVoiceProcessingOtherAudioDuckingConfiguration voiceProcessingOtherAudioDuckingConfiguration API_AVAILABLE(macos(10.14), ios(17.0)) API_UNAVAILABLE(watchos, tvos);
+@property (nonatomic) AVAudioVoiceProcessingOtherAudioDuckingConfiguration voiceProcessingOtherAudioDuckingConfiguration API_AVAILABLE(macos(14.0), ios(17.0)) API_UNAVAILABLE(watchos, tvos);
 
 @end
 
@@ -270,6 +273,16 @@ API_AVAILABLE(macos(10.10), ios(8.0), watchos(4.0), tvos(11.0))
 API_AVAILABLE(macos(10.10), ios(8.0), watchos(2.0), tvos(9.0))
 @interface AVAudioOutputNode : AVAudioIONode
 - (instancetype)init NS_UNAVAILABLE; // fetch instance via -[AVAudioEngine outputNode].
+
+/*! @property intendedSpatialExperience
+    @abstract
+        The AVAudioOutputNode's intended `CASpatialAudioExperience`
+    @discussion
+        Not applicable to AVAudioEngine instances configured in manual rendering
+        mode. If unspecified, the property value defaults to `CAAutomaticSpatialAudio`
+ */
+@property (nonnull, copy) CASpatialAudioExperience *intendedSpatialExperience API_AVAILABLE(visionos(26.0)) API_UNAVAILABLE(ios, watchos, tvos, macos) NS_REFINED_FOR_SWIFT;
+
 @end
 
 NS_ASSUME_NONNULL_END

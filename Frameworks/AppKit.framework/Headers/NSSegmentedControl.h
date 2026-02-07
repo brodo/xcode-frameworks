@@ -1,7 +1,7 @@
 /*
 	NSSegmentedControl.h
 	Application Kit
-	Copyright (c) 2003-2023, Apple Inc.
+	Copyright (c) 2003-2024, Apple Inc.
 	All rights reserved.
 */
 
@@ -112,6 +112,8 @@ typedef NS_ENUM(NSInteger, NSSegmentDistribution) {
 - (void)compressWithPrioritizedCompressionOptions:(NSArray<NSUserInterfaceCompressionOptions *> *)prioritizedOptions API_AVAILABLE(macos(10.13));
 - (NSSize)minimumSizeWithPrioritizedCompressionOptions:(NSArray<NSUserInterfaceCompressionOptions *> *)prioritizedOptions API_AVAILABLE(macos(10.13));
 @property (readonly, copy) NSUserInterfaceCompressionOptions *activeCompressionOptions API_AVAILABLE(macos(10.13));
+
+@property NSControlBorderShape borderShape API_AVAILABLE(macos(26.0));
 
 @end
 

@@ -20,9 +20,7 @@
  @abstract View for rendering metal content
  */
 API_AVAILABLE(macos(10.11), ios(9.0))
-#if defined(TARGET_OS_VISION) && TARGET_OS_VISION
-API_UNAVAILABLE(visionos)
-#endif
+NS_SWIFT_UI_ACTOR
 @interface MTKView : NSView <NSCoding,CALayerDelegate>
 
 /*!
@@ -163,6 +161,15 @@ API_UNAVAILABLE(visionos)
  */
 @property (nonatomic, readonly, nullable) MTLRenderPassDescriptor *currentRenderPassDescriptor;
 
+#if !TARGET_OS_SIMULATOR
+/*!
+ @property currentMTL4RenderPassDescriptor
+ @abstract A render pass descriptor generated from the currentDrawable's texture and the view's depth, stencil, and sample buffers and clear values.
+ @discussion This is a convience property.  The view does not use this descriptor and there is no requirement for an app to use this descriptor.
+ */
+@property (nonatomic, readonly, nullable) MTL4RenderPassDescriptor *currentMTL4RenderPassDescriptor API_AVAILABLE(macos(26.0), ios(26.0));
+#endif
+
 /*!
  @property preferredFramesPerSecond
  @abstract The rate you want the view to redraw its contents.
@@ -234,9 +241,6 @@ API_UNAVAILABLE(visionos)
  @abstract Allows an object to render into the view and respond to resize events
  */
 API_AVAILABLE(macos(10.11), ios(9.0))
-#if defined(TARGET_OS_VISION) && TARGET_OS_VISION
-API_UNAVAILABLE(visionos)
-#endif
 @protocol MTKViewDelegate <NSObject>
 
 /*!
@@ -246,13 +250,13 @@ API_UNAVAILABLE(visionos)
  @param view MTKView which called this method
  @param size New drawable size in pixels
  */
-- (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size;
+- (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size NS_SWIFT_UI_ACTOR;
 
 /*!
  @method drawInMTKView:
  @abstract Called on the delegate when it is asked to render into the view
  @discussion Called on the delegate when it is asked to render into the view
  */
-- (void)drawInMTKView:(nonnull MTKView *)view;
+- (void)drawInMTKView:(nonnull MTKView *)view NS_SWIFT_UI_ACTOR;
 
 @end
